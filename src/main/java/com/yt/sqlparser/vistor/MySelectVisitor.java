@@ -4,6 +4,7 @@ import net.sf.jsqlparser.expression.*;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.select.*;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.*;
 
@@ -310,7 +311,10 @@ public class MySelectVisitor {
     //判断查询字段中是否包含函数
     private boolean judgeExpression(Expression expression) {
         if (!Objects.isNull(expression)) {
-            return expression instanceof Function || expression instanceof CastExpression || expression instanceof CaseExpression || expression instanceof BinaryExpression;
+            return expression instanceof Function ||
+                    expression instanceof CastExpression ||
+                    expression instanceof CaseExpression ||
+                    expression instanceof BinaryExpression;
         }
         return false;
     }
