@@ -1,6 +1,6 @@
-package com.luop;
+package com.yt.sqlparser;
 
-import com.sun.deploy.util.StringUtils;
+import com.yt.sqlparser.vistor.MySelectVisitor;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.select.PlainSelect;

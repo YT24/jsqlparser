@@ -1,7 +1,7 @@
-package com.luop.vistor;
+package com.yt.sqlparser.vistor;
 
-import com.luop.vo.JoinConditionBO;
-import com.luop.vo.TableParseBO;
+import com.yt.sqlparser.vo.JoinConditionBO;
+import com.yt.sqlparser.vo.TableParseBO;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;

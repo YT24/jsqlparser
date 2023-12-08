@@ -1,87 +1,33 @@
-package com.luop;
+package com.yt.sqlparser;
 
-
+import com.yt.sqlparser.vo.JoinConditionBO;
+import com.yt.sqlparser.vistor.TableAndConditionVisitor;
+import com.yt.sqlparser.vo.TableParseBO;
 import net.sf.jsqlparser.JSQLParserException;
-import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
-import net.sf.jsqlparser.statement.Statement;
-import net.sf.jsqlparser.statement.insert.Insert;
+import net.sf.jsqlparser.parser.SimpleNode;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.FromItem;
 import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectBody;
-import net.sf.jsqlparser.statement.select.SetOperationList;
+import net.sf.jsqlparser.statement.select.SelectItem;
 import net.sf.jsqlparser.statement.select.SubSelect;
-import net.sf.jsqlparser.util.TablesNamesFinder;
-import org.junit.jupiter.api.Test;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-class SqlAnalysisApplicationTests {
+public class TableAndConditionHelper {
 
-    @Test
-    public void test(){
-        String sql = "SELECT fsmr.med_id, fsmr.mzh, smrd.ysnr, smrd.ysbt, fsmr.operator_time " +
-                "FROM (SELECT zkbl.med_id, zkbl.operator_time, ghxxb.mzh " +
-                "      FROM (SELECT smr.med_id, smr.operator_time, smr.visit_id " +
-                "            FROM ods_fghis5_mzbl.ods_ys_zkblb smr " +
-                "            JOIN (SELECT IF(ot IS NULL, '', ot) AS ot " +
-                "                  FROM (SELECT MAX(operator_time) AS ot " +
-                "                        FROM ads_xiaobu_ai.ads_dzblxxb) dzb) adsxxb " +
-                "            WHERE smr.operator_time > adsxxb.ot AND smr.med_id IS NOT NULL) zkbl " +
-                "      INNER JOIN ods_fghis.ods_ys_ghxxb ghxxb ON zkbl.visit_id = ghxxb.jzid) fsmr " +
-                "LEFT JOIN ods_fghis5_mzbl.ods_ys_zkblmxb smrd ON fsmr.med_id = smrd.blid";
-
-        try {
-            Statement stmt = CCJSqlParserUtil.parse(sql);
-
-            if (stmt instanceof Select) {
-                Select selectStatement = (Select) stmt;
-                processSelectBody(selectStatement.getSelectBody());
-            }
-        } catch (JSQLParserException e) {
-            e.printStackTrace();
-        }
-    }
-    private static void processSelectBody(SelectBody selectBody) {
-        if (selectBody instanceof PlainSelect) {
-            PlainSelect plainSelect = (PlainSelect) selectBody;
-            processJoins(plainSelect.getJoins());
-
-            // 递归处理子查询
-            if (plainSelect.getFromItem() instanceof SubSelect) {
-                SubSelect subSelect = (SubSelect) plainSelect.getFromItem();
-                processSelectBody(subSelect.getSelectBody());
-            }
-        } else if (selectBody instanceof SetOperationList) {
-            SetOperationList setOperationList = (SetOperationList) selectBody;
-            for (SelectBody select : setOperationList.getSelects()) {
-                processSelectBody(select);
-            }
-        }
-    }
-
-    private static void processJoins(List<Join> joins) {
-        if (joins != null) {
-            for (Join join : joins) {
-                System.out.println("Table: " + join.getRightItem());
-
-                Expression onExpression = join.getOnExpression();
-                if (onExpression instanceof EqualsTo) {
-                    EqualsTo equalsTo = (EqualsTo) onExpression;
-                    System.out.println("On Expression: " + equalsTo.getLeftExpression() + " = " + equalsTo.getRightExpression());
-                }
-
-                System.out.println("-------------------------");
-            }
-        }
-    }
-
-    @Test
-    public void testPlainSql(){
+    public static void main(String[] args) throws JSQLParserException {
         String sql = "select \n" +
                 "  a.reportid,\n" +
                 "  COALESCE(a.hospitalcode, '') AS   hospitalcode,\n" +
@@ -208,46 +154,109 @@ class SqlAnalysisApplicationTests {
                 "a.reportid is not null \n" +
                 "and a.pat_id is not null and a.pat_id <> '' \n" +
                 "AND (a.`lastmodify_dt` > d.et OR d.et IS NULL)";
-        try {
-            Map<String, Set<String>> map = SelectParseHelper.getBloodRelationResult(sql);
-            System.out.println(map);   //{depId=[department.id], userName=[user.name], id=[user.id], depName=[department.name]}
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+
+
+        Select select = (Select) CCJSqlParserUtil.parse(sql);
+        TableAndConditionVisitor visitor = new TableAndConditionVisitor();
+        select.getSelectBody().accept(visitor);
+        List<TableParseBO> tableParseBOS = visitor.getTableParseVOS();
+        tableParseBOS.stream().forEach(System.out::println);
+        System.out.println("--------------------------------");
+        Map<String, TableParseBO> tableParseVOMap = tableParseBOS.stream().collect(Collectors.toMap(TableParseBO::getAlias, Function.identity()));
+        List<JoinConditionBO> joinConditionBOS = visitor.getJoinConditionVOS();
+        joinConditionBOS.forEach(joinConditionBO -> {
+            Optional.ofNullable(tableParseVOMap.get(joinConditionBO.getLeftTblAlias()))
+                    .ifPresent(leftTableParseBO -> {
+                        joinConditionBO.setLeftDbName(leftTableParseBO.getDbName());
+                        joinConditionBO.setLeftTblName(leftTableParseBO.getTblName());
+                    });
+
+            Optional.ofNullable(tableParseVOMap.get(joinConditionBO.getRightTblAlias()))
+                    .ifPresent(rightTableParseBO -> {
+                        joinConditionBO.setRightDbName(rightTableParseBO.getDbName());
+                        joinConditionBO.setRightTblName(rightTableParseBO.getTblName());
+                    });
+            System.out.println(joinConditionBO);
+        });
+        System.out.println("--------------------------------");
+        joinConditionBOS.stream().filter(s -> StringUtils.isBlank(s.getLeftTblName()) || StringUtils.isBlank(s.getRightTblName()))
+                .forEach(s -> {
+                    try {
+                        if (StringUtils.isBlank(s.getLeftTblName())) {
+                            parseTblNameByTblAliasAndColumn(sql, s.getLeftTblAlias(), s.getLeftColumn(), Boolean.FALSE, s);
+                        }
+                        if (StringUtils.isBlank(s.getRightTblName())) {
+                            parseTblNameByTblAliasAndColumn(sql, s.getRightTblAlias(), s.getRightColumn(), Boolean.TRUE, s);
+                        }
+                    } catch (JSQLParserException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+        System.out.println("--------------------------------");
+        joinConditionBOS.forEach(s -> System.out.println(s));
     }
 
-    @Test
-    public void testSubQuerySql(){
-        String sql = "       SELECT t1.customer_id, t1.total_spent, t2.total_orders, date() as curdate " +
-                "        FROM ( " +
-                "                 SELECT customer_id, SUM(order_total) AS total_spent " +
-                "                 FROM customer_summary " +
-                "                 GROUP BY customer_id " +
-                "                 HAVING total_spent > 1000 " +
-                "             ) AS t1 " +
-                "                 JOIN ( " +
-                "            SELECT customer_id, COUNT(DISTINCT order_id) AS total_orders " +
-                "            FROM customer_summary " +
-                "            GROUP BY customer_id " +
-                " " +
-                "        ) AS t2 ON t1.customer_id = t2.customer_id;";
-        try {
-            Map<String, Set<String>> map = SelectParseHelper.getBloodRelationResult(sql);
-            System.out.println(map);   //{total_spent=[customer_summary.order_total], customer_id=[customer_summary.customer_id], total_orders=[customer_summary.order_id]}
-        } catch (Exception e) {
-            e.printStackTrace();
+    private static void parseTblNameByTblAliasAndColumn(String sql, String tblAlias, String column, boolean right, JoinConditionBO joinConditionBO) throws JSQLParserException {
+        Select select = (Select) CCJSqlParserUtil.parse(sql);
+        PlainSelect plainSelect = (PlainSelect) select.getSelectBody();
+        FromItem fromItem = plainSelect.getFromItem();
+        List<Join> joins = plainSelect.getJoins();
+        List<SelectItem> selectItems = plainSelect.getSelectItems();
+
+        TableParseBO tableParseBO = processJoin(joins, column);
+        if (Objects.isNull(tableParseBO)){
+            tableParseBO = processTable(fromItem, selectItems, column);
         }
+        Optional.ofNullable(tableParseBO).ifPresent(s -> {
+            if (right) {
+                joinConditionBO.setRightDbName(s.getDbName());
+                joinConditionBO.setRightTblName(s.getTblName());
+            } else {
+                joinConditionBO.setLeftDbName(s.getDbName());
+                joinConditionBO.setLeftTblName(s.getTblName());
+            }
+        });
     }
 
-    @Test
-    public void testUnionSql(){
-        String sql = "SELECT t1.customer_id as id, t1.order_total as money FROM customer1 t1 UNION ALL SELECT t2.customer_id as id, t2.order_total as money FROM customer2 t2";
-        try {
-            Map<String, Set<String>> map = SelectParseHelper.getBloodRelationResult(sql);
-            System.out.println(map);   //{money=[customer1.order_total, customer2.order_total], id=[customer1.customer_id, customer2.customer_id]}
-        } catch (Exception e) {
-            e.printStackTrace();
+    private static TableParseBO processJoin(List<Join> joins, String column) {
+        if (CollectionUtils.isNotEmpty(joins)) {
+            for (Join join : joins) {
+                FromItem rightItem = join.getRightItem();
+                if (rightItem instanceof SubSelect) {
+                    SubSelect subSelect = (SubSelect) rightItem;
+                    SelectBody subSelectBody = subSelect.getSelectBody();
+                    PlainSelect plainSelect = (PlainSelect) subSelectBody;
+                    return processTable(plainSelect.getFromItem(), plainSelect.getSelectItems(), column);
+                }
+            }
         }
+        return null;
+
     }
 
+    private static TableParseBO processTable(FromItem fromItem, List<SelectItem> selectItems, String leftColumn) {
+        AtomicReference<TableParseBO> tableParseBO = new AtomicReference<>();
+        if (fromItem instanceof Table) {
+            Table table = (Table) fromItem;
+            if (Objects.equals(table.getASTNode().jjtGetFirstToken().toString(), table.getASTNode().jjtGetLastToken().toString())) {
+                throw new RuntimeException("FROM clause must be in the format 'dbname.tablename'");
+            }
+            if (CollectionUtils.isNotEmpty(selectItems)) {
+                selectItems.forEach(selectItem -> {
+                    SimpleNode astNode = selectItem.getASTNode();
+                    if (astNode.jjtGetLastToken().toString().equals(leftColumn)) {
+                        tableParseBO.set(TableParseBO.builder().tblName(table.getName())
+                                .dbName(table.getASTNode().jjtGetFirstToken().toString()).build());
+
+                    }
+                });
+            }
+        } else if (fromItem instanceof SubSelect) {
+            SubSelect subSelect = (SubSelect) fromItem;
+            SelectBody subSelectBody = subSelect.getSelectBody();
+            PlainSelect plainSelect = (PlainSelect) subSelectBody;
+            return processTable(plainSelect.getFromItem(), plainSelect.getSelectItems(), leftColumn);
+        }
+        return tableParseBO.get();
+    }
 }

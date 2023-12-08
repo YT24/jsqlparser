@@ -1,4 +1,4 @@
-package com.luop.vo;
+package com.yt.sqlparser.vo;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

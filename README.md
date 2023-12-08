@@ -20,8 +20,7 @@
 
 参考网址
 -
-    https://github.com/JSQLParser/JSqlParser
-    https://gitee.com/zzyijia/jsqlparser
+    https://gitee.com/kobe8-24/sqlparser.git
 
 
     
