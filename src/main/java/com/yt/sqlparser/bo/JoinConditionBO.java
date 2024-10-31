@@ -1,4 +1,4 @@
-package com.yt.sqlparser.vo;
+package com.yt.sqlparser.bo;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,6 +37,11 @@ public class JoinConditionBO {
     private String leftColumn;
 
     /**
+     * 左表字段ID
+     */
+    private Long leftColumnId;
+
+    /**
      * 右库名
      */
     private String rightDbName;
@@ -55,4 +60,9 @@ public class JoinConditionBO {
      * 右表字段
      */
     private String rightColumn;
+
+    /**
+     * 右表字段ID
+     */
+    private Long rightColumnId;
 }

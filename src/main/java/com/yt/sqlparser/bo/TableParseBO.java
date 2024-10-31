@@ -1,4 +1,4 @@
-package com.yt.sqlparser.vo;
+package com.yt.sqlparser.bo;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -31,4 +31,8 @@ public class TableParseBO {
      */
     private String alias;
 
+    /**
+     * 子查询表别名
+     */
+    private String subQueryAlias;
 }

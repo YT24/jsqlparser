@@ -1,23 +1,18 @@
-package com.yt.sqlparser.vistor;
+package com.yt.sqlparser.visitor;
 
-import com.yt.sqlparser.vo.JoinConditionBO;
-import com.yt.sqlparser.vo.TableParseBO;
+
+import com.yt.sqlparser.bo.JoinConditionBO;
+import com.yt.sqlparser.bo.TableParseBO;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
-import net.sf.jsqlparser.statement.select.FromItem;
-import net.sf.jsqlparser.statement.select.Join;
-import net.sf.jsqlparser.statement.select.PlainSelect;
-import net.sf.jsqlparser.statement.select.SelectVisitorAdapter;
-import net.sf.jsqlparser.statement.select.SubSelect;
+import net.sf.jsqlparser.statement.select.*;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-
 
 public class TableAndConditionVisitor extends SelectVisitorAdapter {
 
@@ -25,14 +20,20 @@ public class TableAndConditionVisitor extends SelectVisitorAdapter {
 
     private List<JoinConditionBO> joinConditionBOS = new ArrayList<>();
 
-    @Override
+    /*@Override
     public void visit(PlainSelect plainSelect) {
-        processTable(plainSelect.getFromItem());
+        FromItem fromItem = plainSelect.getFromItem();
+        String alias = Objects.nonNull(fromItem.getAlias()) ? fromItem.getAlias().getName() : null;
+        processTable(fromItem,alias);
         processJoins(plainSelect.getJoins());
-        //processOnExpression(plainSelect.getWhere());
+    }*/
+
+    public void visit(FromItem fromItem, String alias, List<Join> joins) {
+        processTable(fromItem, alias);
+        processJoins(joins);
     }
 
-    private void processTable(FromItem fromItem) {
+    private void processTable(FromItem fromItem, String alias) {
         if (fromItem instanceof Table) {
             Table table = (Table) fromItem;
             if (Objects.equals(table.getASTNode().jjtGetFirstToken().toString(), table.getASTNode().jjtGetLastToken().toString())) {
@@ -40,17 +41,21 @@ public class TableAndConditionVisitor extends SelectVisitorAdapter {
             }
             TableParseBO tableParseBO = TableParseBO.builder().dbName(table.getASTNode().jjtGetFirstToken().toString())
                     .tblName(table.getName())
+                    .subQueryAlias(alias)
                     .alias(Objects.nonNull(table.getAlias()) ? table.getAlias().getName() : table.getName()).build();
             tableParseBOS.add(tableParseBO);
         } else if (fromItem instanceof SubSelect) {
-            ((SubSelect) fromItem).getSelectBody().accept(this);
+            //((SubSelect) fromItem).getSelectBody().accept(this);
+            PlainSelect plainSelect = (PlainSelect) ((SubSelect) fromItem).getSelectBody();
+            FromItem subFromItem = plainSelect.getFromItem();
+            this.visit(plainSelect.getFromItem(), alias, plainSelect.getJoins());
         }
     }
 
     private void processJoins(List<Join> joins) {
         if (joins != null) {
             for (Join join : joins) {
-                processTable(join.getRightItem());
+                processTable(join.getRightItem(), join.getRightItem() instanceof SubSelect ? ((SubSelect) join.getRightItem()).getAlias().getName() : null);
                 processOnExpression(join.getOnExpression());
             }
         }
@@ -59,10 +64,6 @@ public class TableAndConditionVisitor extends SelectVisitorAdapter {
     private void processOnExpression(Expression onExpression) {
         if (onExpression instanceof EqualsTo) {
             EqualsTo equalsTo = (EqualsTo) onExpression;
-            if(equalsTo.getLeftExpression() instanceof Function || equalsTo.getRightExpression() instanceof Function){
-                // on 表达式中包含函数不处理
-                return;
-            }
             Column leftExpression = (Column) equalsTo.getLeftExpression();
             Column rightExpression = (Column) equalsTo.getRightExpression();
             JoinConditionBO joinConditionBO = JoinConditionBO.builder()

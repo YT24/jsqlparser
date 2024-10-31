@@ -48,6 +48,12 @@
             <version>4.4</version> <!-- 使用最新版本 -->
         </dependency>
 
+        <dependency>
+            <groupId>org.apache.calcite</groupId>
+            <artifactId>calcite-core</artifactId>
+           <version>1.6.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
